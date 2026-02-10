@@ -5,7 +5,7 @@ import { getNextKey, DailyLimitError } from '@/lib/keys';
 import { validateMessage, unauthorized, badRequest, tooManyRequests, parseBody } from '@/lib/security';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const MODEL = 'tngtech/deepseek-r1t2-chimera:free';
+const MODEL = 'deepseek/deepseek-r1:free';
 
 const SYSTEM_PROMPT = `You are Rocode, an AI coding assistant specialized in Roblox development with Luau.
 You help users write scripts, debug code, and learn Roblox game development.
@@ -92,8 +92,13 @@ export async function POST(request: NextRequest) {
     if (!orResponse.ok) {
         const errorText = await orResponse.text().catch(() => 'Unknown error');
         console.error('OpenRouter error:', orResponse.status, errorText);
+        let userMessage = 'AI service temporarily unavailable. Please try again.';
+        try {
+            const parsed = JSON.parse(errorText);
+            if (parsed?.error?.message) userMessage = parsed.error.message;
+        } catch { /* use default */ }
         return NextResponse.json(
-            { error: 'AI service temporarily unavailable. Please try again.' },
+            { error: userMessage },
             { status: 502 },
         );
     }
