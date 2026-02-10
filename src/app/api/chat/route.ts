@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifySession } from '@/lib/session';
 import * as db from '@/lib/db';
-import { getNextKey, DailyLimitError } from '@/lib/keys';
+import { pickNextKey, confirmKeyUsage, DailyLimitError } from '@/lib/keys';
 import { validateMessage, unauthorized, badRequest, tooManyRequests, parseBody } from '@/lib/security';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
@@ -47,10 +47,13 @@ export async function POST(request: NextRequest) {
     // 5. Save user message
     await db.addMessageToChat(body.chatId, 'user', body.message.trim());
 
-    // 6. Get API key via smart rotation
+    // 6. Get API key via smart rotation (does NOT count usage yet)
     let apiKey: string;
+    let keyIndex: number;
     try {
-        apiKey = await getNextKey();
+        const picked = await pickNextKey();
+        apiKey = picked.key;
+        keyIndex = picked.keyIndex;
     } catch (err) {
         if (err instanceof DailyLimitError) {
             return NextResponse.json(
@@ -144,9 +147,10 @@ export async function POST(request: NextRequest) {
             } catch (err) {
                 console.error('Stream error:', err);
             } finally {
-                // 10. Save full AI response to KV
+                // 10. Save full AI response and count usage ONLY on success
                 if (fullContent.trim()) {
                     await db.addMessageToChat(chatId, 'assistant', fullContent);
+                    await confirmKeyUsage(keyIndex);
                 }
                 controller.enqueue(encoder.encode('data: [DONE]\n\n'));
                 controller.close();

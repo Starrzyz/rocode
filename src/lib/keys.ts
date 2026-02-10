@@ -23,7 +23,11 @@ function getKeys(): string[] {
  * If all keys have reached the daily limit, throws DailyLimitError.
  * Atomically increments the chosen key's usage counter.
  */
-export async function getNextKey(): Promise<string> {
+/**
+ * Smart key rotation: picks the key with the lowest usage count today.
+ * Does NOT increment the counter — call confirmKeyUsage() after a successful request.
+ */
+export async function pickNextKey(): Promise<{ key: string; keyIndex: number }> {
     const keys = getKeys();
     if (keys.length === 0) {
         throw new Error('No OpenRouter API keys configured');
@@ -31,7 +35,6 @@ export async function getNextKey(): Promise<string> {
 
     const usages = await getAllKeyUsages();
 
-    // Find the key with the lowest usage that's under the limit
     let bestIndex = -1;
     let bestUsage = Infinity;
 
@@ -47,10 +50,14 @@ export async function getNextKey(): Promise<string> {
         throw new DailyLimitError();
     }
 
-    // Atomically increment the chosen key's usage
-    await incrementKeyUsage(bestIndex + 1); // 1-indexed in Redis
+    return { key: keys[bestIndex], keyIndex: bestIndex + 1 };
+}
 
-    return keys[bestIndex];
+/**
+ * Increment usage counter for a key — call only after a successful AI response.
+ */
+export async function confirmKeyUsage(keyIndex: number): Promise<void> {
+    await incrementKeyUsage(keyIndex);
 }
 
 /**
