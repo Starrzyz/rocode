@@ -53,7 +53,7 @@ export default function Sidebar({
             >
                 {/* Logo */}
                 <div className="flex items-center gap-3 px-5 py-5 border-b border-[#e5e5e5]">
-                    <Image src="/Icon.svg" alt="Rocode" width={110} height={30} className="h-7 w-auto" />
+                    <Image src="/Logo.png" alt="Rocode" width={110} height={30} className="h-7 w-auto" />
                 </div>
 
                 {/* New Chat Button */}

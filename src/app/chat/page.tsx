@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import Sidebar from '@/components/Sidebar';
 import ChatMessages from '@/components/ChatMessages';
 import ChatInput from '@/components/ChatInput';
+import SettingsModal from '@/components/SettingsModal';
 import type { Chat, Message } from '@/lib/chat';
 
 // Chat list item (without messages, as returned by GET /api/chats)
@@ -28,6 +29,7 @@ export default function ChatPage() {
     const [streamingContent, setStreamingContent] = useState<string | null>(null);
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [settingsOpen, setSettingsOpen] = useState(false);
 
     const streamAbortRef = useRef<AbortController | null>(null);
 
@@ -262,9 +264,19 @@ export default function ChatPage() {
                             <path d="M3 5h14M3 10h14M3 15h14" />
                         </svg>
                     </button>
-                    <h1 className="text-sm font-medium text-[#1a1a1a] truncate">
+                    <h1 className="text-sm font-medium text-[#1a1a1a] truncate flex-1">
                         {chatList.find((c) => c.id === activeChatId)?.title || 'Rocode'}
                     </h1>
+                    <button
+                        onClick={() => setSettingsOpen(true)}
+                        className="p-1.5 rounded-lg hover:bg-[#f0f0f1] transition-colors cursor-pointer text-[#999] hover:text-[#1a1a1a]"
+                        aria-label="Settings"
+                    >
+                        <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
+                            <path d="M10 13a3 3 0 100-6 3 3 0 000 6z" />
+                            <path d="M17.4 12.3a1.3 1.3 0 00.26 1.43l.05.05a1.58 1.58 0 01-1.12 2.7 1.58 1.58 0 01-1.12-.46l-.05-.05a1.3 1.3 0 00-1.43-.26 1.3 1.3 0 00-.79 1.19v.14a1.58 1.58 0 01-3.16 0v-.07A1.3 1.3 0 009.25 15.8a1.3 1.3 0 00-1.43.26l-.05.05a1.58 1.58 0 01-2.24-2.24l.05-.05a1.3 1.3 0 00.26-1.43 1.3 1.3 0 00-1.19-.79h-.14a1.58 1.58 0 010-3.16h.07A1.3 1.3 0 005.8 7.75a1.3 1.3 0 00-.26-1.43l-.05-.05a1.58 1.58 0 012.24-2.24l.05.05a1.3 1.3 0 001.43.26h.06a1.3 1.3 0 00.79-1.19v-.14a1.58 1.58 0 013.16 0v.07a1.3 1.3 0 00.79 1.19 1.3 1.3 0 001.43-.26l.05-.05a1.58 1.58 0 012.24 2.24l-.05.05a1.3 1.3 0 00-.26 1.43v.06a1.3 1.3 0 001.19.79h.14a1.58 1.58 0 010 3.16h-.07a1.3 1.3 0 00-1.19.79z" />
+                        </svg>
+                    </button>
                 </header>
 
                 {/* Error banner */}
@@ -291,6 +303,12 @@ export default function ChatPage() {
                 {/* Input */}
                 <ChatInput onSend={handleSend} disabled={isStreaming || isTyping} />
             </main>
+
+            <SettingsModal
+                isOpen={settingsOpen}
+                onClose={() => setSettingsOpen(false)}
+                username={user}
+            />
         </div>
     );
 }

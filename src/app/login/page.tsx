@@ -53,7 +53,7 @@ export default function LoginPage() {
             <div className="w-full max-w-sm animate-fadeIn">
                 {/* Logo */}
                 <div className="flex justify-center mb-10">
-                    <Image src="/Icon.svg" alt="Rocode" width={160} height={44} className="h-10 w-auto" priority />
+                    <Image src="/Logo.png" alt="Rocode" width={160} height={44} className="h-10 w-auto" priority />
                 </div>
 
                 {/* Card */}
