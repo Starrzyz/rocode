@@ -376,7 +376,7 @@ export default function ChatPage() {
                             </svg>
                         </button>
                         {modelDropdownOpen && (
-                            <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-xl border border-[#e5e5e5] shadow-[0_4px_20px_rgba(0,0,0,0.08)] z-50 overflow-hidden animate-fadeIn">
+                            <div className="absolute right-0 top-full mt-1 w-72 bg-white rounded-xl border border-[#e5e5e5] shadow-[0_4px_20px_rgba(0,0,0,0.08)] z-50 overflow-hidden animate-fadeIn">
                                 <button
                                     onClick={() => { setSelectedModel('basic'); setModelDropdownOpen(false); }}
                                     className={`w-full text-left px-4 py-3 hover:bg-[#f7f7f8] transition-colors cursor-pointer ${selectedModel === 'basic' ? 'bg-[#f7f7f8]' : ''}`}
@@ -433,7 +433,7 @@ export default function ChatPage() {
                                 >
                                     <div className="flex items-center justify-between">
                                         <div>
-                                            <p className="text-sm font-medium text-[#1a1a1a]">
+                                            <p className="text-sm font-medium text-[#1a1a1a] whitespace-nowrap">
                                                 🧩 Rocode Max Plugin
                                                 <span className="ml-1.5 text-[10px] font-semibold text-[#f59e0b] bg-[#fef3c7] rounded-full px-1.5 py-0.5">COMING SOON</span>
                                             </p>
