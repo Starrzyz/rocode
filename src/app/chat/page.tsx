@@ -427,6 +427,20 @@ export default function ChatPage() {
                                         )}
                                     </div>
                                 </button>
+                                <div className="border-t border-[#e5e5e5]" />
+                                <div
+                                    className="w-full text-left px-4 py-3 opacity-60 cursor-not-allowed"
+                                >
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm font-medium text-[#1a1a1a]">
+                                                🧩 Rocode Max Plugin
+                                                <span className="ml-1.5 text-[10px] font-semibold text-[#f59e0b] bg-[#fef3c7] rounded-full px-1.5 py-0.5">COMING SOON</span>
+                                            </p>
+                                            <p className="text-xs text-[#999] mt-0.5">Code directly in Roblox Studio</p>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         )}
                     </div>
