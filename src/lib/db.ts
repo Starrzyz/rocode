@@ -1,5 +1,6 @@
 import { Redis } from '@upstash/redis';
 import type { Chat, Message } from './chat';
+import type { PlanId, ModelId } from './plans';
 
 // Initialize Redis client — uses env vars automatically on Vercel
 const redis = new Redis({
@@ -13,6 +14,9 @@ interface StoredUser {
     username: string;
     passwordHash: string;
     createdAt: number;
+    plan?: PlanId;
+    stripeCustomerId?: string;
+    stripeSubscriptionId?: string;
 }
 
 export async function getUser(username: string): Promise<StoredUser | null> {
@@ -24,8 +28,50 @@ export async function createUser(username: string, passwordHash: string): Promis
         username: username.toLowerCase(),
         passwordHash,
         createdAt: Date.now(),
+        plan: 'free',
     };
     await redis.set(`user:${username.toLowerCase()}`, user);
+}
+
+export async function getUserPlan(username: string): Promise<PlanId> {
+    const user = await getUser(username);
+    return user?.plan || 'free';
+}
+
+export async function setUserPlan(
+    username: string,
+    plan: PlanId,
+    stripeCustomerId?: string,
+    stripeSubscriptionId?: string,
+): Promise<void> {
+    const user = await getUser(username);
+    if (!user) return;
+    user.plan = plan;
+    if (stripeCustomerId) user.stripeCustomerId = stripeCustomerId;
+    if (stripeSubscriptionId) user.stripeSubscriptionId = stripeSubscriptionId;
+    await redis.set(`user:${username.toLowerCase()}`, user);
+}
+
+export async function getStripeCustomerId(username: string): Promise<string | undefined> {
+    const user = await getUser(username);
+    return user?.stripeCustomerId;
+}
+
+export async function findUserByStripeCustomerId(customerId: string): Promise<string | null> {
+    // Scan for user with this Stripe customer ID
+    // In a production app you'd have a reverse index, but for small user bases this works
+    let cursor = 0;
+    do {
+        const [nextCursor, keys] = await redis.scan(cursor, { match: 'user:*', count: 100 });
+        cursor = typeof nextCursor === 'string' ? parseInt(nextCursor) : nextCursor;
+        for (const key of keys) {
+            const user = await redis.get<StoredUser>(key as string);
+            if (user?.stripeCustomerId === customerId) {
+                return user.username;
+            }
+        }
+    } while (cursor !== 0);
+    return null;
 }
 
 // ── Chats ──────────────────────────────────────────
@@ -87,31 +133,22 @@ export async function addMessageToChat(
     return chat;
 }
 
-// ── API Key Usage Tracking ─────────────────────────
+// ── Per-User Model Usage Tracking ──────────────────
 
 function todayKey(): string {
     return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 }
 
-export async function getKeyUsage(keyIndex: number): Promise<number> {
-    const count = await redis.get<number>(`key_usage:${todayKey()}:${keyIndex}`);
+export async function getUserModelUsage(username: string, model: ModelId): Promise<number> {
+    const key = `usage:${todayKey()}:${username}:${model}`;
+    const count = await redis.get<number>(key);
     return count || 0;
 }
 
-export async function getAllKeyUsages(): Promise<number[]> {
-    const day = todayKey();
-    const pipeline = redis.pipeline();
-    for (let i = 1; i <= 5; i++) {
-        pipeline.get(`key_usage:${day}:${i}`);
-    }
-    const results = await pipeline.exec<(number | null)[]>();
-    return results.map((r) => r || 0);
-}
-
-export async function incrementKeyUsage(keyIndex: number): Promise<number> {
-    const key = `key_usage:${todayKey()}:${keyIndex}`;
+export async function incrementUserModelUsage(username: string, model: ModelId): Promise<number> {
+    const key = `usage:${todayKey()}:${username}:${model}`;
     const count = await redis.incr(key);
-    // Auto-expire after 48h to clean up old counters
+    // Auto-expire after 48h
     if (count === 1) {
         await redis.expire(key, 48 * 60 * 60);
     }
@@ -124,7 +161,7 @@ export async function checkRateLimit(username: string): Promise<{ allowed: boole
     const key = `rate:${username}`;
     const now = Date.now();
     const windowMs = 60 * 1000; // 1 minute window
-    const maxRequests = 10;
+    const maxRequests = 15; // 15 req/min matches Gemini rate limit
 
     // Clean old entries and count recent ones
     await redis.zremrangebyscore(key, 0, now - windowMs);
@@ -136,7 +173,7 @@ export async function checkRateLimit(username: string): Promise<{ allowed: boole
 
     // Add this request
     await redis.zadd(key, { score: now, member: `${now}:${Math.random()}` });
-    await redis.expire(key, 120); // expire the whole set after 2 mins
+    await redis.expire(key, 120);
 
     return { allowed: true, remaining: maxRequests - count - 1 };
 }

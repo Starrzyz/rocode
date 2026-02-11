@@ -4,12 +4,12 @@ const MAX_MESSAGE_LENGTH = 4000;
 const MAX_USERNAME_LENGTH = 30;
 const MAX_PASSWORD_LENGTH = 128;
 
-export function validateMessage(content: unknown): { ok: boolean; msg?: string } {
+export function validateMessage(content: unknown, maxLength: number = MAX_MESSAGE_LENGTH): { ok: boolean; msg?: string } {
     if (typeof content !== 'string') return { ok: false, msg: 'Message must be a string.' };
     const trimmed = content.trim();
     if (!trimmed) return { ok: false, msg: 'Message cannot be empty.' };
-    if (trimmed.length > MAX_MESSAGE_LENGTH) {
-        return { ok: false, msg: `Message too long (max ${MAX_MESSAGE_LENGTH} characters).` };
+    if (trimmed.length > maxLength) {
+        return { ok: false, msg: `Message too long (max ${maxLength} characters).` };
     }
     return { ok: true };
 }

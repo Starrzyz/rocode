@@ -8,6 +8,7 @@ import ChatMessages from '@/components/ChatMessages';
 import ChatInput from '@/components/ChatInput';
 import SettingsModal from '@/components/SettingsModal';
 import type { Chat, Message } from '@/lib/chat';
+import type { ModelId } from '@/lib/plans';
 
 // Chat list item (without messages, as returned by GET /api/chats)
 interface ChatListItem {
@@ -30,18 +31,46 @@ export default function ChatPage() {
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [settingsOpen, setSettingsOpen] = useState(false);
+    const [selectedModel, setSelectedModel] = useState<ModelId>('basic');
+    const [userPlan, setUserPlan] = useState<string>('free');
+    const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
 
     const streamAbortRef = useRef<AbortController | null>(null);
+    const dropdownRef = useRef<HTMLDivElement>(null);
 
     // Auth guard
     useEffect(() => {
         if (!loading && !user) router.replace('/login');
     }, [user, loading, router]);
 
-    // Load chat list on mount
+    // Load chat list + plan on mount
     useEffect(() => {
-        if (user) refreshChatList();
+        if (user) {
+            refreshChatList();
+            fetchPlan();
+        }
     }, [user]);
+
+    // Close dropdown on outside click
+    useEffect(() => {
+        function handleClick(e: MouseEvent) {
+            if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+                setModelDropdownOpen(false);
+            }
+        }
+        document.addEventListener('mousedown', handleClick);
+        return () => document.removeEventListener('mousedown', handleClick);
+    }, []);
+
+    const fetchPlan = useCallback(async () => {
+        try {
+            const res = await fetch('/api/status', { credentials: 'same-origin' });
+            if (res.ok) {
+                const data = await res.json();
+                setUserPlan(data.plan || 'free');
+            }
+        } catch { /* silent */ }
+    }, []);
 
     const refreshChatList = useCallback(async () => {
         try {
@@ -159,7 +188,7 @@ export default function ChatPage() {
                 const res = await fetch('/api/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ chatId, message: text }),
+                    body: JSON.stringify({ chatId, message: text, model: selectedModel }),
                     credentials: 'same-origin',
                     signal: abortController.signal,
                 });
@@ -226,7 +255,7 @@ export default function ChatPage() {
                 refreshChatList();
             }
         },
-        [activeChatId, refreshChatList],
+        [activeChatId, refreshChatList, selectedModel],
     );
 
     if (loading || !user) return null;
@@ -237,6 +266,8 @@ export default function ChatPage() {
         user: user,
         messages: [],
     }));
+
+    const canUseMax = userPlan === 'pro' || userPlan === 'dev';
 
     return (
         <div className="h-screen flex bg-white overflow-hidden">
@@ -267,6 +298,74 @@ export default function ChatPage() {
                     <h1 className="text-sm font-medium text-[#1a1a1a] truncate flex-1">
                         {chatList.find((c) => c.id === activeChatId)?.title || 'Rocode'}
                     </h1>
+
+                    {/* Model Selector Dropdown */}
+                    <div className="relative" ref={dropdownRef}>
+                        <button
+                            onClick={() => setModelDropdownOpen(!modelDropdownOpen)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#e5e5e5] hover:bg-[#f0f0f1] transition-colors cursor-pointer text-xs font-medium text-[#4a4a4a] mr-2"
+                        >
+                            <span>{selectedModel === 'basic' ? '⚡ Basic' : '🔥 Max'}</span>
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                <path d="M3 4.5L6 7.5L9 4.5" />
+                            </svg>
+                        </button>
+                        {modelDropdownOpen && (
+                            <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-xl border border-[#e5e5e5] shadow-[0_4px_20px_rgba(0,0,0,0.08)] z-50 overflow-hidden animate-fadeIn">
+                                <button
+                                    onClick={() => { setSelectedModel('basic'); setModelDropdownOpen(false); }}
+                                    className={`w-full text-left px-4 py-3 hover:bg-[#f7f7f8] transition-colors cursor-pointer ${selectedModel === 'basic' ? 'bg-[#f7f7f8]' : ''}`}
+                                >
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm font-medium text-[#1a1a1a]">⚡ Basic</p>
+                                            <p className="text-xs text-[#999] mt-0.5">Gemini Flash Lite — fast & reliable</p>
+                                        </div>
+                                        {selectedModel === 'basic' && (
+                                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#22c55e" strokeWidth="2">
+                                                <path d="M3 8l3.5 3.5L13 5" />
+                                            </svg>
+                                        )}
+                                    </div>
+                                </button>
+                                <div className="border-t border-[#e5e5e5]" />
+                                <button
+                                    onClick={() => {
+                                        if (canUseMax) {
+                                            setSelectedModel('max');
+                                            setModelDropdownOpen(false);
+                                        } else {
+                                            router.push('/pricing');
+                                            setModelDropdownOpen(false);
+                                        }
+                                    }}
+                                    className={`w-full text-left px-4 py-3 hover:bg-[#f7f7f8] transition-colors cursor-pointer ${selectedModel === 'max' ? 'bg-[#f7f7f8]' : ''}`}
+                                >
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm font-medium text-[#1a1a1a]">
+                                                🔥 Max
+                                                {!canUseMax && <span className="ml-1.5 text-[10px] font-semibold text-white bg-[#1a1a1a] rounded-full px-1.5 py-0.5">PRO</span>}
+                                            </p>
+                                            <p className="text-xs text-[#999] mt-0.5">DeepSeek V3 — best quality coding</p>
+                                        </div>
+                                        {selectedModel === 'max' && canUseMax && (
+                                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#22c55e" strokeWidth="2">
+                                                <path d="M3 8l3.5 3.5L13 5" />
+                                            </svg>
+                                        )}
+                                        {!canUseMax && (
+                                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#999" strokeWidth="1.5">
+                                                <rect x="4" y="7" width="8" height="7" rx="1.5" />
+                                                <path d="M5.5 7V5a2.5 2.5 0 015 0v2" />
+                                            </svg>
+                                        )}
+                                    </div>
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
                     <button
                         onClick={() => setSettingsOpen(true)}
                         className="p-1.5 rounded-lg hover:bg-[#f0f0f1] transition-colors cursor-pointer text-[#999] hover:text-[#1a1a1a]"
@@ -308,6 +407,7 @@ export default function ChatPage() {
                 isOpen={settingsOpen}
                 onClose={() => setSettingsOpen(false)}
                 username={user}
+                onPlanChange={fetchPlan}
             />
         </div>
     );
