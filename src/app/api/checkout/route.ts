@@ -33,9 +33,23 @@ export async function POST(request: NextRequest) {
     const customerId = await db.getStripeCustomerId(username);
 
     try {
-        const url = await createCheckoutSession(plan, username, customerId);
+        const url = await createCheckoutSession(plan, username, customerId || undefined);
         return NextResponse.json({ url });
-    } catch (err) {
+    } catch (err: unknown) {
+        // If the stored customer ID is invalid (e.g. test-mode ID in live mode), retry without it
+        const stripeErr = err as { code?: string };
+        if (customerId && stripeErr.code === 'resource_missing') {
+            try {
+                const url = await createCheckoutSession(plan, username, undefined);
+                return NextResponse.json({ url });
+            } catch (retryErr) {
+                console.error('Checkout retry error:', retryErr);
+                return NextResponse.json(
+                    { error: 'Failed to create checkout session.' },
+                    { status: 500 },
+                );
+            }
+        }
         console.error('Checkout error:', err);
         return NextResponse.json(
             { error: 'Failed to create checkout session.' },
