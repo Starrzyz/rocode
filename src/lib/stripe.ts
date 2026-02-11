@@ -42,13 +42,15 @@ export async function createCheckoutSession(
         line_items: [{ price: priceId, quantity: 1 }],
         success_url: `${getBaseUrl()}/chat?upgraded=true`,
         cancel_url: `${getBaseUrl()}/pricing`,
-        metadata: { username },
+        subscription_data: {
+            metadata: { username },
+        },
     };
 
     if (customerId) {
         params.customer = customerId;
     } else {
-        params.customer_creation = 'always';
+        params.customer_email = undefined; // Let Stripe collect email
     }
 
     const session = await getStripe().checkout.sessions.create(params);

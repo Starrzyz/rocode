@@ -27,22 +27,16 @@ export async function POST(request: NextRequest) {
         switch (event.type) {
             case 'checkout.session.completed': {
                 const session = event.data.object as Stripe.Checkout.Session;
-                const username = session.metadata?.username;
                 const customerId = session.customer as string;
-
-                if (!username) {
-                    console.error('No username in checkout metadata');
-                    break;
-                }
-
-                // Get subscription to find the plan
                 const subscriptionId = session.subscription as string;
+
                 if (subscriptionId) {
                     const subscription = await getStripe().subscriptions.retrieve(subscriptionId);
+                    const username = subscription.metadata?.username;
                     const priceId = subscription.items.data[0]?.price?.id;
                     const plan = priceId ? getPlanFromPriceId(priceId) : null;
 
-                    if (plan) {
+                    if (username && plan) {
                         await db.setUserPlan(username, plan, customerId, subscriptionId);
                         console.log(`Upgraded ${username} to ${plan}`);
                     }
