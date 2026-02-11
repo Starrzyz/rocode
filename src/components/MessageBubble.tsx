@@ -27,7 +27,7 @@ export default function MessageBubble({ role, content, isStreaming }: MessageBub
             >
                 <div
                     className="message-content"
-                    dangerouslySetInnerHTML={{ __html: formatMessage(content) }}
+                    dangerouslySetInnerHTML={{ __html: formatMessage(content, isStreaming) }}
                 />
                 {isStreaming && (
                     <span className="inline-block w-0.5 h-4 bg-current animate-blink ml-0.5 align-text-bottom" />

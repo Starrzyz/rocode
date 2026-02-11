@@ -7,16 +7,18 @@ import Sidebar from '@/components/Sidebar';
 import ChatMessages from '@/components/ChatMessages';
 import ChatInput from '@/components/ChatInput';
 import SettingsModal from '@/components/SettingsModal';
-import type { Chat, Message } from '@/lib/chat';
+import type { Message } from '@/lib/chat';
 import type { ModelId } from '@/lib/plans';
 
-// Chat list item (without messages, as returned by GET /api/chats)
 interface ChatListItem {
     id: string;
     title: string;
     createdAt: number;
     updatedAt: number;
 }
+
+// Track which model was last used per chat
+const chatModelMap = new Map<string, ModelId>();
 
 export default function ChatPage() {
     const { user, loading, logout } = useAuth();
@@ -62,6 +64,38 @@ export default function ChatPage() {
         return () => document.removeEventListener('mousedown', handleClick);
     }, []);
 
+    // Register hidden admin console command
+    useEffect(() => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const win = window as any;
+        const subscriptionObj = {
+            end: async (mode: string) => {
+                if (mode !== 'now') {
+                    console.log('%c⚠️ Usage: subscription.end("now")', 'color: #ef4444; font-weight: bold');
+                    return;
+                }
+                console.log('%c🔄 Cancelling subscription...', 'color: #f59e0b; font-weight: bold');
+                try {
+                    const res = await fetch('/api/billing/cancel', {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                    });
+                    if (res.ok) {
+                        console.log('%c✅ Subscription cancelled immediately. Refreshing...', 'color: #22c55e; font-weight: bold');
+                        setTimeout(() => window.location.reload(), 1500);
+                    } else {
+                        const data = await res.json();
+                        console.log('%c❌ ' + (data.error || 'Failed'), 'color: #ef4444; font-weight: bold');
+                    }
+                } catch {
+                    console.log('%c❌ Network error', 'color: #ef4444; font-weight: bold');
+                }
+            },
+        };
+        win.subscription = subscriptionObj;
+        return () => { delete win.subscription; };
+    }, []);
+
     const fetchPlan = useCallback(async () => {
         try {
             const res = await fetch('/api/status', { credentials: 'same-origin' });
@@ -79,18 +113,21 @@ export default function ChatPage() {
                 const data = await res.json();
                 setChatList(data.chats || []);
             }
-        } catch {
-            // Silently fail on list refresh
-        }
+        } catch { /* silent */ }
     }, []);
 
-    // Load messages when active chat changes
+    // Load messages when active chat changes — restore model from memory
     useEffect(() => {
         if (!activeChatId) {
             setMessages([]);
             return;
         }
         loadChatMessages(activeChatId);
+        // Restore the model that was used for this chat
+        const savedModel = chatModelMap.get(activeChatId);
+        if (savedModel) {
+            setSelectedModel(savedModel);
+        }
     }, [activeChatId]);
 
     const loadChatMessages = async (chatId: string) => {
@@ -116,9 +153,7 @@ export default function ChatPage() {
                 setActiveChatId(data.chat.id);
                 await refreshChatList();
             }
-        } catch {
-            // fail silently
-        }
+        } catch { /* silent */ }
         setSidebarOpen(false);
     }, [refreshChatList]);
 
@@ -139,10 +174,9 @@ export default function ChatPage() {
                     setActiveChatId(null);
                     setMessages([]);
                 }
+                chatModelMap.delete(id);
                 await refreshChatList();
-            } catch {
-                // fail silently
-            }
+            } catch { /* silent */ }
         },
         [activeChatId, refreshChatList],
     );
@@ -151,6 +185,14 @@ export default function ChatPage() {
         await logout();
         router.replace('/login');
     }, [logout, router]);
+
+    // Stop streaming
+    const handleStop = useCallback(() => {
+        if (streamAbortRef.current) {
+            streamAbortRef.current.abort();
+            streamAbortRef.current = null;
+        }
+    }, []);
 
     // Send message and stream AI response
     const handleSend = useCallback(
@@ -174,6 +216,9 @@ export default function ChatPage() {
                     return;
                 }
             }
+
+            // Remember which model is used for this chat
+            chatModelMap.set(chatId!, selectedModel);
 
             // Optimistic: show user message immediately
             const userMsg: Message = { role: 'user', content: text, timestamp: Date.now() };
@@ -230,9 +275,7 @@ export default function ChatPage() {
                                 fullContent += parsed.content;
                                 setStreamingContent(fullContent);
                             }
-                        } catch {
-                            // Skip malformed chunks
-                        }
+                        } catch { /* skip */ }
                     }
                 }
 
@@ -244,7 +287,10 @@ export default function ChatPage() {
                     ]);
                 }
             } catch (err) {
-                if ((err as Error).name !== 'AbortError') {
+                // If aborted, still finalize the partial content
+                if ((err as Error).name === 'AbortError') {
+                    // No error to show — user intentionally stopped
+                } else {
                     setError('Connection failed. Please try again.');
                 }
             } finally {
@@ -260,7 +306,6 @@ export default function ChatPage() {
 
     if (loading || !user) return null;
 
-    // Map chatList to the format Sidebar expects
     const sidebarChats = chatList.map((c) => ({
         ...c,
         user: user,
@@ -382,12 +427,7 @@ export default function ChatPage() {
                 {error && (
                     <div className="mx-4 md:mx-6 mt-2 px-4 py-2.5 bg-red-50 border border-red-100 rounded-lg text-xs text-red-600 animate-fadeIn flex justify-between items-center">
                         <span>{error}</span>
-                        <button
-                            onClick={() => setError(null)}
-                            className="text-red-400 hover:text-red-600 ml-3 cursor-pointer"
-                        >
-                            ✕
-                        </button>
+                        <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600 ml-3 cursor-pointer">✕</button>
                     </div>
                 )}
 
@@ -400,7 +440,12 @@ export default function ChatPage() {
                 />
 
                 {/* Input */}
-                <ChatInput onSend={handleSend} disabled={isStreaming || isTyping} />
+                <ChatInput
+                    onSend={handleSend}
+                    onStop={handleStop}
+                    disabled={isStreaming || isTyping}
+                    isStreaming={isStreaming}
+                />
             </main>
 
             <SettingsModal
