@@ -81,7 +81,7 @@ export default function PricingPage() {
                         </div>
                         <ul className="space-y-3 mb-8 flex-1">
                             <Feature text="10 Basic messages/day" />
-                            <Feature text="Gemini Flash Lite model" />
+                            <Feature text="Rocode Basic model" />
                             <Feature text="7-day chat history" />
                             <Feature text="2,000 char message limit" />
                             <FeatureNo text="Max model access" />
@@ -111,7 +111,7 @@ export default function PricingPage() {
                         <ul className="space-y-3 mb-8 flex-1">
                             <Feature text="Unlimited Basic messages" highlight />
                             <Feature text="5 Max messages/day" />
-                            <Feature text="DeepSeek V3 access" />
+                            <Feature text="Rocode Max access" />
                             <Feature text="30-day chat history" />
                             <Feature text="8,000 char message limit" />
                             <Feature text="Priority responses" />
@@ -139,7 +139,7 @@ export default function PricingPage() {
                         <ul className="space-y-3 mb-8 flex-1">
                             <Feature text="Unlimited Basic messages" highlight />
                             <Feature text="50 Max messages/day" highlight />
-                            <Feature text="DeepSeek V3 access" />
+                            <Feature text="Rocode Max access" />
                             <Feature text="Unlimited chat history" />
                             <Feature text="16,000 char message limit" />
                             <Feature text="Priority responses" />
@@ -165,7 +165,7 @@ export default function PricingPage() {
                         />
                         <FAQ
                             q="What's the difference between Basic and Max models?"
-                            a="Basic uses Gemini 2.0 Flash Lite — fast and reliable for everyday coding tasks. Max uses DeepSeek V3 — the best available model for complex coding, debugging, and advanced Luau development."
+                            a="Rocode Basic is fast and reliable for everyday coding tasks. Rocode Max is our most powerful model for complex coding, debugging, and advanced Luau development."
                         />
                         <FAQ
                             q="What happens when I hit my daily limit?"

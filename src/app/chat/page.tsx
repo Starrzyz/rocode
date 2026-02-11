@@ -36,8 +36,10 @@ export default function ChatPage() {
     const [selectedModel, setSelectedModel] = useState<ModelId>('basic');
     const [userPlan, setUserPlan] = useState<string>('free');
     const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
+    const [stoppedMessageIndex, setStoppedMessageIndex] = useState<number | undefined>(undefined);
 
     const streamAbortRef = useRef<AbortController | null>(null);
+    const streamingContentRef = useRef<string>('');
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     // Auth guard
@@ -120,6 +122,7 @@ export default function ChatPage() {
     useEffect(() => {
         if (!activeChatId) {
             setMessages([]);
+            setStoppedMessageIndex(undefined);
             return;
         }
         loadChatMessages(activeChatId);
@@ -151,6 +154,7 @@ export default function ChatPage() {
             if (res.ok) {
                 const data = await res.json();
                 setActiveChatId(data.chat.id);
+                setStoppedMessageIndex(undefined);
                 await refreshChatList();
             }
         } catch { /* silent */ }
@@ -160,6 +164,7 @@ export default function ChatPage() {
     const handleSelectChat = useCallback((id: string) => {
         setActiveChatId(id);
         setError(null);
+        setStoppedMessageIndex(undefined);
         setSidebarOpen(false);
     }, []);
 
@@ -173,6 +178,7 @@ export default function ChatPage() {
                 if (activeChatId === id) {
                     setActiveChatId(null);
                     setMessages([]);
+                    setStoppedMessageIndex(undefined);
                 }
                 chatModelMap.delete(id);
                 await refreshChatList();
@@ -186,11 +192,10 @@ export default function ChatPage() {
         router.replace('/login');
     }, [logout, router]);
 
-    // Stop streaming
+    // Stop streaming — keep partial content as a finalized message
     const handleStop = useCallback(() => {
         if (streamAbortRef.current) {
             streamAbortRef.current.abort();
-            streamAbortRef.current = null;
         }
     }, []);
 
@@ -198,6 +203,7 @@ export default function ChatPage() {
     const handleSend = useCallback(
         async (text: string) => {
             setError(null);
+            setStoppedMessageIndex(undefined);
             let chatId = activeChatId;
 
             // Create chat if needed
@@ -211,6 +217,7 @@ export default function ChatPage() {
                     const data = await res.json();
                     chatId = data.chat.id;
                     setActiveChatId(chatId);
+                    await refreshChatList();
                 } catch {
                     setError('Failed to create chat.');
                     return;
@@ -220,14 +227,15 @@ export default function ChatPage() {
             // Remember which model is used for this chat
             chatModelMap.set(chatId!, selectedModel);
 
-            // Optimistic: show user message immediately
+            // Add user message to state immediately
             const userMsg: Message = { role: 'user', content: text, timestamp: Date.now() };
             setMessages((prev) => [...prev, userMsg]);
             setIsTyping(true);
 
-            // Start streaming request
+            // Start streaming
             const abortController = new AbortController();
             streamAbortRef.current = abortController;
+            streamingContentRef.current = '';
 
             try {
                 const res = await fetch('/api/chat', {
@@ -249,7 +257,6 @@ export default function ChatPage() {
                 // Read SSE stream
                 setIsTyping(false);
                 setIsStreaming(true);
-                let fullContent = '';
 
                 const reader = res.body!.getReader();
                 const decoder = new TextDecoder();
@@ -272,24 +279,36 @@ export default function ChatPage() {
                         try {
                             const parsed = JSON.parse(data);
                             if (parsed.content) {
-                                fullContent += parsed.content;
-                                setStreamingContent(fullContent);
+                                streamingContentRef.current += parsed.content;
+                                setStreamingContent(streamingContentRef.current);
                             }
                         } catch { /* skip */ }
                     }
                 }
 
-                // Finalize: add assistant message to local state
-                if (fullContent.trim()) {
+                // Completed normally — finalize message
+                const finalContent = streamingContentRef.current;
+                if (finalContent.trim()) {
                     setMessages((prev) => [
                         ...prev,
-                        { role: 'assistant', content: fullContent, timestamp: Date.now() },
+                        { role: 'assistant', content: finalContent, timestamp: Date.now() },
                     ]);
                 }
             } catch (err) {
-                // If aborted, still finalize the partial content
                 if ((err as Error).name === 'AbortError') {
-                    // No error to show — user intentionally stopped
+                    // User clicked stop — keep partial content with "stopped" indicator
+                    const partialContent = streamingContentRef.current;
+                    if (partialContent.trim()) {
+                        setMessages((prev) => {
+                            const updated = [
+                                ...prev,
+                                { role: 'assistant' as const, content: partialContent, timestamp: Date.now() },
+                            ];
+                            // Mark the last message as stopped
+                            setStoppedMessageIndex(updated.length - 1);
+                            return updated;
+                        });
+                    }
                 } else {
                     setError('Connection failed. Please try again.');
                 }
@@ -298,6 +317,7 @@ export default function ChatPage() {
                 setIsStreaming(false);
                 setIsTyping(false);
                 streamAbortRef.current = null;
+                streamingContentRef.current = '';
                 refreshChatList();
             }
         },
@@ -344,7 +364,7 @@ export default function ChatPage() {
                         {chatList.find((c) => c.id === activeChatId)?.title || 'Rocode'}
                     </h1>
 
-                    {/* Model Selector Dropdown */}
+                    {/* Model Selector */}
                     <div className="relative" ref={dropdownRef}>
                         <button
                             onClick={() => setModelDropdownOpen(!modelDropdownOpen)}
@@ -363,8 +383,8 @@ export default function ChatPage() {
                                 >
                                     <div className="flex items-center justify-between">
                                         <div>
-                                            <p className="text-sm font-medium text-[#1a1a1a]">⚡ Basic</p>
-                                            <p className="text-xs text-[#999] mt-0.5">Gemini Flash Lite — fast & reliable</p>
+                                            <p className="text-sm font-medium text-[#1a1a1a]">⚡ Rocode Basic</p>
+                                            <p className="text-xs text-[#999] mt-0.5">Fast & reliable for everyday tasks</p>
                                         </div>
                                         {selectedModel === 'basic' && (
                                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#22c55e" strokeWidth="2">
@@ -389,10 +409,10 @@ export default function ChatPage() {
                                     <div className="flex items-center justify-between">
                                         <div>
                                             <p className="text-sm font-medium text-[#1a1a1a]">
-                                                🔥 Max
+                                                🔥 Rocode Max
                                                 {!canUseMax && <span className="ml-1.5 text-[10px] font-semibold text-white bg-[#1a1a1a] rounded-full px-1.5 py-0.5">PRO</span>}
                                             </p>
-                                            <p className="text-xs text-[#999] mt-0.5">DeepSeek V3 — best quality coding</p>
+                                            <p className="text-xs text-[#999] mt-0.5">Best quality for complex code</p>
                                         </div>
                                         {selectedModel === 'max' && canUseMax && (
                                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#22c55e" strokeWidth="2">
@@ -437,6 +457,7 @@ export default function ChatPage() {
                     streamingContent={streamingContent}
                     isTyping={isTyping}
                     onSuggestion={handleSend}
+                    stoppedMessageIndex={stoppedMessageIndex}
                 />
 
                 {/* Input */}

@@ -10,6 +10,7 @@ interface ChatMessagesProps {
     streamingContent: string | null;
     isTyping: boolean;
     onSuggestion: (text: string) => void;
+    stoppedMessageIndex?: number;
 }
 
 const suggestions = [
@@ -19,7 +20,7 @@ const suggestions = [
     'How to use TweenService?',
 ];
 
-export default function ChatMessages({ messages, streamingContent, isTyping, onSuggestion }: ChatMessagesProps) {
+export default function ChatMessages({ messages, streamingContent, isTyping, onSuggestion, stoppedMessageIndex }: ChatMessagesProps) {
     const bottomRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -54,7 +55,12 @@ export default function ChatMessages({ messages, streamingContent, isTyping, onS
                 ) : (
                     <>
                         {messages.map((msg, i) => (
-                            <MessageBubble key={i} role={msg.role} content={msg.content} />
+                            <MessageBubble
+                                key={i}
+                                role={msg.role}
+                                content={msg.content}
+                                isStopped={stoppedMessageIndex === i}
+                            />
                         ))}
                         {isTyping && !streamingContent && <TypingIndicator />}
                         {streamingContent && (

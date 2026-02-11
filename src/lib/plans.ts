@@ -48,8 +48,8 @@ export const PLANS: Record<PlanId, PlanConfig> = {
 };
 
 export const MODEL_INFO: Record<ModelId, { label: string; description: string }> = {
-    basic: { label: 'Basic', description: 'Gemini 2.0 Flash Lite — fast & reliable' },
-    max: { label: 'Max', description: 'DeepSeek V3 — best quality coding' },
+    basic: { label: 'Basic', description: 'Rocode Basic — fast & reliable' },
+    max: { label: 'Max', description: 'Rocode Max — best quality coding' },
 };
 
 /**
